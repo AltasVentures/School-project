@@ -2,6 +2,7 @@
 import sqlite3
 import subprocess
 import os
+import shutil  # Neu: Zum Kopieren von Dateien
 import tkinter as tk
 from tkinter import filedialog
 
@@ -35,7 +36,7 @@ def add_file():
             return
 
         file_name = os.path.basename(file_path)
-        
+
         conn = sqlite3.connect(DATABASE_NAME)
         cursor = conn.cursor()
         try:
@@ -49,14 +50,16 @@ def add_file():
 
     except Exception as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
-        print("Stellen Sie sicher, dass eine grafische Benutzeroberfläche verfügbar ist (z.B. X11, Wayland).")
-
+        print("Stellen Sie sicher, dass eine grafische Benutzeroberfläche verfügbar ist.")
 
 def execute_file(path):
     """Führt die ausgewählte Datei als Python-Skript aus."""
     print(f"\n--- Führe Skript aus: {os.path.basename(path)} ---\n")
+    if not os.path.exists(path):
+        print("Fehler: Die Datei existiert am angegebenen Pfad nicht mehr.")
+        return
+
     try:
-        # Wir nehmen an, dass es sich um Python-Skripte handelt
         result = subprocess.run(["python3", path], capture_output=True, text=True, check=True)
         print("--- Ausgabe ---")
         print(result.stdout)
@@ -73,7 +76,6 @@ def execute_file(path):
         print(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
     print("\n--- Ausführung beendet ---\n")
 
-
 def delete_file(file_id):
     """Löscht eine Datei aus der Datenbank."""
     conn = sqlite3.connect(DATABASE_NAME)
@@ -82,6 +84,60 @@ def delete_file(file_id):
     conn.commit()
     conn.close()
     print("Datei erfolgreich aus der Datenbank gelöscht.")
+
+# --- NEUE FUNKTION: Inhalt anzeigen ---
+def view_file_content(path):
+    """Zeigt den Textinhalt einer Datei an."""
+    print(f"\n--- Inhalt von: {os.path.basename(path)} ---")
+    
+    if not os.path.exists(path):
+        print("Fehler: Die Datei existiert am ursprünglichen Pfad nicht mehr.")
+        return
+
+    try:
+        # Wir versuchen, die Datei als Text (UTF-8) zu lesen
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            print(content)
+    except UnicodeDecodeError:
+        print("[INFO] Datei kann nicht als Text angezeigt werden (Binärdatei oder unbekanntes Format).")
+    except Exception as e:
+        print(f"Fehler beim Lesen der Datei: {e}")
+    
+    print("\n--- Ende des Inhalts ---")
+
+# --- NEUE FUNKTION: Datei downloaden ---
+def download_file(source_path):
+    """Kopiert die Datei an einen neuen Ort."""
+    print("Öffne 'Speichern unter' Dialog...")
+    
+    if not os.path.exists(source_path):
+        print("Fehler: Die Quelldatei existiert nicht mehr.")
+        return
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        
+        # Vorschlag für den Dateinamen holen
+        original_name = os.path.basename(source_path)
+        
+        # Dialog öffnen, wo man speichern will
+        dest_path = filedialog.asksaveasfilename(
+            title="Datei speichern unter",
+            initialfile=original_name
+        )
+        root.destroy()
+
+        if dest_path:
+            shutil.copy2(source_path, dest_path) # copy2 behält Metadaten
+            print(f"Datei erfolgreich gespeichert nach: {dest_path}")
+        else:
+            print("Download abgebrochen.")
+            
+    except Exception as e:
+        print(f"Fehler beim Kopieren: {e}")
+
 
 def show_and_select_files():
     """Zeigt alle Dateien an und lässt den Benutzer eine für Aktionen auswählen."""
@@ -105,7 +161,7 @@ def show_and_select_files():
         choice_str = input("Gib die Nummer der Datei ein, die du verwalten möchtest (oder 'q' zum Abbrechen): ")
         if choice_str.lower() == 'q':
             return
-        
+
         choice_id = int(choice_str)
         selected_file = next((f for f in files if f['id'] == choice_id), None)
 
@@ -115,9 +171,12 @@ def show_and_select_files():
 
         while True:
             print(f"\n--- Aktionen für: {selected_file['name']} ---")
-            print("1. Ausführen")
-            print("2. Löschen")
-            print("3. Zurück zur Übersicht")
+            print("1. Ausführen (Python Skript)")
+            print("2. Löschen (aus DB)")
+            print("3. Inhalt anzeigen (Code/Text)") # Neu
+            print("4. Downloaden (Speichern unter)") # Neu
+            print("5. Zurück zur Übersicht")
+            
             action_choice = input("Deine Wahl: ")
 
             if action_choice == '1':
@@ -126,6 +185,10 @@ def show_and_select_files():
                 delete_file(selected_file['id'])
                 break 
             elif action_choice == '3':
+                view_file_content(selected_file['path']) # Aufruf der neuen Funktion
+            elif action_choice == '4':
+                download_file(selected_file['path']) # Aufruf der neuen Funktion
+            elif action_choice == '5':
                 break
             else:
                 print("Ungültige Aktion.")
