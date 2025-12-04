@@ -44,7 +44,7 @@ def divide_R(a, b):
         return None
     return a / b
 
-# --- Test der Funktionen (wie in Teil a gefordert) ---
+# Test der Funktionen
 print("--- Test der definierten Funktionen ---")
 add(7, 9)
 ergebnis_add = add_R(7, 9)
